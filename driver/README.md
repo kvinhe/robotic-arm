@@ -39,7 +39,7 @@ is what this tool does.
   current than USB can give; USB only carries the data.
 
 Plug the adapter in and it appears as a serial port: a `/dev/cu.usbmodem…` device on
-macOS, a COM port on Windows. You normally don't need its name — every tool finds the
+macOS. You normally don't need its name — every tool finds the
 adapter by itself when exactly one USB serial adapter is plugged in, and refuses (listing
 what it found) when there are none or several.
 
@@ -58,8 +58,7 @@ ctest --test-dir build       # run the tests
 ```
 
 The configure step is needed once; after that CMake re-runs it by itself when
-`CMakeLists.txt` changes, and each build recompiles only the files that changed. The
-same commands work on Windows.
+`CMakeLists.txt` changes, and each build recompiles only the files that changed.
 
 ## Assigning the IDs
 
@@ -126,6 +125,23 @@ recording went:
 Both write goal positions directly and bypass the safety layer, which does not exist
 yet. They are bench tools, not for anything that runs unattended.
 
+## Calibrate, then move with IK
+
+```
+build/servo_tool calibrate                 guided: L pose, a nudge per joint, a range sweep
+build/servo_tool where                     current counts, joint angles and stylus tip
+build/servo_tool move-to 200 30 110 -90    tip to x y z (mm), stylus pitch (deg)
+```
+
+`calibrate` finds, for each joint, which encoder count is 0° in the kinematic model, which
+way is positive, and its safe range, and saves them to `calibration.txt`. The reference pose
+is one you can judge by eye -- upper arm vertical, forearm horizontal, stylus hanging straight
+down -- and its model angles are computed from the geometry.
+
+`move-to` moves the tip in a straight line, solving IK every 20 ms. Every point must be
+reachable, above the table and inside the calibrated range, or nothing moves. It ends
+holding with torque on; add `--release` to let go.
+
 ## How the protocol works
 
 Each message is a packet on the serial line:
@@ -165,24 +181,38 @@ marker and it stays green from then on.
 
 ## Files
 
-| File | What it does |
+`src/` is layered; each folder only includes from the folders before it.
+
+| Folder | File | What it does |
+| --- | --- | --- |
+| | `main.cpp` | `servo_tool`: IDs, register reads/writes, `torque-off`, `fk`/`ik`, dispatch |
+| `bus/` | `transport.h` | The bytes-in/bytes-out interface `Bus` depends on |
+| | `serial_port.h` | Serial port interface, plus finding the adapter automatically |
+| | `serial_port.cpp` | Its implementation, on termios (macOS / Linux) |
+| | `sts3215.h/.cpp` | Builds and parses servo packets; ping, read, write, set ID |
+| `kinematics/` | `joints.h` | The four joints and the `Pose` type (encoder counts) |
+| | `kinematics.h/.cpp` | Forward and closed-form inverse kinematics |
+| | `calibration.h/.cpp` | Joint angles <-> encoder counts, saved in `calibration.txt` |
+| `motion/` | `recording.h/.cpp` | A recorded motion: file format, interpolation, reverse/retrace, timing |
+| | `arm.h/.cpp` | `Arm`: reads and commands all four joints, follows paths, holds on faults |
+| | `paths.h/.cpp` | Straight-line paths planned with IK, plus the tap and swipe building blocks |
+| `commands/` | `commands.h` | Declares the whole-arm commands |
+| | `record_replay.cpp` | `record`, `replay` |
+| | `calibrate.cpp` | `calibrate`, `where` |
+| | `touch.cpp` | `move-to`, `tap`, `swipe` |
+| | `unlock.cpp` | `unlock`: phone screen layout and the unlock sequence |
+| | `phone.h` | Phone models, orientation and keypad layout for `unlock` |
+
+| Test file | What it checks |
 | --- | --- |
-| `src/transport.h` | The bytes-in/bytes-out interface `Bus` depends on |
-| `src/serial_port.h` | Serial port interface, plus finding the adapter automatically |
-| `src/serial_port_posix.cpp` | macOS / Linux implementation, on termios |
-| `src/serial_port_win32.cpp` | Windows implementation, on the Win32 COM API |
-| `src/sts3215.h/.cpp` | Builds and parses servo packets; ping, read, write, set ID |
-| `src/main.cpp` | `servo_tool`: IDs, register reads/writes, `torque-off`, dispatch |
-| `src/recording.h/.cpp` | A recorded motion: file format, interpolation, reverse/retrace, timing |
-| `src/record_replay.cpp` | The `record` and `replay` commands |
 | `tests/fake_serial_port.h` | A fake `Transport` that scripts servo replies, with or without echo |
 | `tests/test_bus.cpp` | Bus behaviour against both adapter styles, then the hardening backlog |
 | `tests/test_tools.cpp` | The replay plan, the recording file format, port auto-detect |
+| `tests/test_kinematics.cpp` | FK against the SO-101 URDF; `FK(IK(pose)) = pose` over random poses |
 
-Everything above the serial port is platform-independent; the build picks one
-`serial_port_*.cpp`. Keeping the OS behind that one interface is deliberate: if the
-control loop ever moves onto a microcontroller, a third implementation of that file is
-the whole port, not a rewrite of the driver.
+Everything above `bus/serial_port.cpp` is platform-independent. Keeping the OS behind
+that one interface is deliberate: if the control loop ever moves onto a microcontroller,
+a new implementation of that file is the whole port, not a rewrite of the driver.
 
 ## Next
 

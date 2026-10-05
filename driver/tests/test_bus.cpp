@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 #include "fake_serial_port.h"
-#include "sts3215.h"
+#include "bus/sts3215.h"
 
 using sts3215::Bus;
 

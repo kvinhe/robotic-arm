@@ -1,6 +1,6 @@
 #include "doctest/doctest.h"
-#include "recording.h"
-#include "serial_port.h"
+#include "motion/recording.h"
+#include "bus/serial_port.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -156,12 +156,9 @@ TEST_CASE("load shifts a recording to start at t = 0") {
     std::remove(path.c_str());
 }
 
-TEST_CASE("looks_like_port recognises port names on every platform") {
+TEST_CASE("looks_like_port recognises port names") {
     CHECK(looks_like_port("/dev/cu.usbmodem5B8E1134991"));
     CHECK(looks_like_port("/dev/ttyUSB0"));
-    CHECK(looks_like_port("COM5"));
-    CHECK(looks_like_port("com12"));
-    CHECK(looks_like_port("\\\\.\\COM12"));
 }
 
 TEST_CASE("looks_like_port does not mistake commands or flags for ports") {
@@ -169,8 +166,6 @@ TEST_CASE("looks_like_port does not mistake commands or flags for ports") {
     CHECK_FALSE(looks_like_port("pos"));
     CHECK_FALSE(looks_like_port("--baud"));
     CHECK_FALSE(looks_like_port("--seconds"));
-    CHECK_FALSE(looks_like_port("COM"));
-    CHECK_FALSE(looks_like_port("COMPASS"));
     CHECK_FALSE(looks_like_port("recording.txt"));
 }
 

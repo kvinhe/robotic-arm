@@ -1,8 +1,6 @@
 # C++ build output
 build/
-*.exe
 *.o
-*.obj
 compile_commands.json
 
 # CMake
@@ -18,9 +16,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Calibration output and arm recordings are machine-specific, not source
+# Calibration and recordings are specific to this arm, not source
 recording*.txt
-configs/calibration_*.yaml
+calibration*.txt
 
 # Editors
 .vscode/

@@ -1,14 +1,12 @@
 #pragma once
 
-#include "transport.h"
+#include "bus/transport.h"
 
-#include <cctype>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-// A USB serial port. Implemented once per OS: serial_port_posix.cpp (macOS/Linux) and
-// serial_port_win32.cpp, which is the only file allowed to include windows.h.
+// A USB serial port, on termios (macOS and Linux).
 class SerialPort : public Transport {
 public:
     SerialPort() = default;
@@ -30,25 +28,13 @@ public:
     static std::vector<std::string> list_adapters();
 
 private:
-#ifdef _WIN32
-    void* handle_ = nullptr;   // HANDLE; void* keeps windows.h out of this header
-#else
     int fd_ = -1;
-#endif
     std::string name_;
     std::string last_error_;
 };
 
-// True for "/dev/...", "COM5", "\\.\COM12" -- anything that is a port, not a command.
-inline bool looks_like_port(const std::string& arg) {
-    if (arg.rfind("/dev/", 0) == 0 || arg.rfind("\\\\.\\", 0) == 0) return true;
-    if (arg.size() < 4) return false;
-    for (size_t i = 0; i < arg.size(); ++i) {
-        const int c = std::toupper(static_cast<unsigned char>(arg[i]));
-        if (i < 3 ? c != "COM"[i] : !std::isdigit(c)) return false;
-    }
-    return true;
-}
+// True for "/dev/..." -- a port, not a command.
+inline bool looks_like_port(const std::string& arg) { return arg.rfind("/dev/", 0) == 0; }
 
 // Picks the only adapter found. Refuses to guess between several: writing servo
 // packets to the wrong device is not harmless.

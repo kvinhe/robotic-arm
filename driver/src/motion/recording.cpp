@@ -1,4 +1,4 @@
-#include "recording.h"
+#include "motion/recording.h"
 
 #include <algorithm>
 #include <cmath>
@@ -161,18 +161,6 @@ bool Recording::load(const std::string& path, Recording* out, std::string* error
     for (Sample& s : samples) s.t -= t0;
     *out = Recording(std::move(samples));
     return true;
-}
-
-int max_abs_difference(const Pose& a, const Pose& b) {
-    int worst = 0;
-    for (size_t j = 0; j < kJointCount; ++j) worst = std::max(worst, std::abs(a[j] - b[j]));
-    return worst;
-}
-
-Pose clamp(const Pose& pose, const Pose& lo, const Pose& hi) {
-    Pose out{};
-    for (size_t j = 0; j < kJointCount; ++j) out[j] = std::clamp(pose[j], lo[j], hi[j]);
-    return out;
 }
 
 }  // namespace arm

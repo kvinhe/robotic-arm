@@ -10,32 +10,29 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # lets editors understand the code
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)       # optimized unless asked otherwise
 endif()
-# Turn on compiler warnings for every target. MSVC (Windows) spells the flags differently.
-if(MSVC)
-    add_compile_options(/W4)
-else()
-    add_compile_options(-Wall -Wextra)
-endif()
+# Compiler warnings for every target.
+add_compile_options(-Wall -Wextra)
 
 # Make a library called driver_core from these files
-add_library(driver_core STATIC src/sts3215.cpp src/recording.cpp)
+add_library(driver_core STATIC
+    src/bus/sts3215.cpp src/kinematics/kinematics.cpp src/kinematics/calibration.cpp
+    src/motion/recording.cpp)
 # Anything that uses driver_core can #include headers from src/.
 target_include_directories(driver_core PUBLIC src)
 
-# Pick the serial port file for this OS and store its name in the variable SERIAL_PORT.
-if(WIN32)
-    set(SERIAL_PORT src/serial_port_win32.cpp)
-else()
-    set(SERIAL_PORT src/serial_port_posix.cpp)
-endif()
 # Make a program called servo_tool from these source files...
-add_executable(servo_tool src/main.cpp src/record_replay.cpp ${SERIAL_PORT})
+add_executable(servo_tool
+    src/main.cpp
+    src/motion/arm.cpp src/motion/paths.cpp
+    src/commands/record_replay.cpp src/commands/calibrate.cpp src/commands/touch.cpp
+    src/commands/unlock.cpp
+    src/bus/serial_port.cpp)
 # ...and link in the driver_core library (the protocol and recording code).
 target_link_libraries(servo_tool PRIVATE driver_core)
 
 # Tests: a second program, built from the test files plus the same library.
 enable_testing()
-add_executable(driver_tests tests/test_bus.cpp tests/test_tools.cpp)
+add_executable(driver_tests tests/test_bus.cpp tests/test_tools.cpp tests/test_kinematics.cpp)
 target_include_directories(driver_tests PRIVATE third_party)   # where doctest.h lives
 target_link_libraries(driver_tests PRIVATE driver_core)
 # Register it with ctest, so `ctest --test-dir build` runs it.

@@ -21,6 +21,7 @@ constexpr uint8_t kBroadcastId = 0xFE;
 // Control table. Below 40 is EEPROM (survives power-off); the rest is RAM.
 constexpr uint8_t kRegId = 5;               // EEPROM: this servo's ID, 0-253
 constexpr uint8_t kRegBaudRate = 6;         // EEPROM: baud index, 0 = 1 Mbaud
+constexpr uint8_t kRegPositionOffset = 31;  // EEPROM, 2 bytes: shifts what position reads
 constexpr uint8_t kRegLock = 55;            // EEPROM write lock: 0 unlocked, 1 locked
 constexpr uint8_t kRegTorqueEnable = 40;
 constexpr uint8_t kRegAcceleration = 41;    // units of 100 steps/s^2

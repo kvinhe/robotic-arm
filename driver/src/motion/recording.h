@@ -1,18 +1,12 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
+#include "kinematics/joints.h"
+
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace arm {
-
-constexpr size_t kJointCount = 4;
-constexpr std::array<uint8_t, kJointCount> kJointIds{1, 2, 3, 4};
-constexpr std::array<const char*, kJointCount> kJointNames{"base", "shoulder", "elbow", "wrist"};
-
-using Pose = std::array<int, kJointCount>;   // encoder counts 0-4095, in kJointIds order
 
 struct Sample {
     double t;   // seconds from the start
@@ -47,13 +41,5 @@ public:
 private:
     std::vector<Sample> samples_;
 };
-
-int max_abs_difference(const Pose& a, const Pose& b);
-Pose clamp(const Pose& pose, const Pose& lo, const Pose& hi);
-
-// The `servo_tool record` and `servo_tool replay` commands (record_replay.cpp).
-// `port` may be empty to auto-detect; args are the command's own flags.
-int record_command(const std::string& port, const std::vector<std::string>& args);
-int replay_command(const std::string& port, const std::vector<std::string>& args);
 
 }  // namespace arm

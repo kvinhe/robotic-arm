@@ -1,4 +1,4 @@
-#include "serial_port.h"
+#include "bus/serial_port.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -96,7 +96,7 @@ bool SerialPort::open(const std::string& name, uint32_t baud_rate) {
     if (tcsetattr(fd, TCSANOW, &tio) < 0) return fail("tcsetattr failed");
 #endif
 
-    int lines = TIOCM_DTR | TIOCM_RTS;   // hold DTR/RTS low, as the Win32 version does
+    int lines = TIOCM_DTR | TIOCM_RTS;   // hold DTR/RTS low
     ioctl(fd, TIOCMBIC, &lines);
 
     fd_ = fd;

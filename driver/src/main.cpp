@@ -1,6 +1,7 @@
-#include "recording.h"
-#include "serial_port.h"
-#include "sts3215.h"
+#include "commands/commands.h"
+#include "kinematics/kinematics.h"
+#include "bus/serial_port.h"
+#include "bus/sts3215.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,6 +27,15 @@ void print_usage() {
         "  torque-off           disable torque on joints 1-4 (the arm goes limp: support it)\n"
         "  record [--seconds N] [--out FILE]   torque off; record the arm as you move it\n"
         "  replay [--seconds N] [--in FILE] [--reverse] [--yes]   play a recording back\n"
+        "  calibrate            guided setup: zero pose, directions, safe ranges -> calibration.txt\n"
+        "  where                where the arm is now: counts, joint angles, stylus tip\n"
+        "  move-to <x> <y> <z> <pitch> [--speed MM_S] [--release]   straight-line move (mm, deg)\n"
+        "  tap <x> <y> <z> [--depth MM] [--count N]      quick tap; z = screen surface\n"
+        "  swipe <x1> <y1> <x2> <y2> <z> [--speed MM_S]  drag along the screen without lifting\n"
+        "  unlock <model> <pin> [--check]   measure the stylus on the screen centre, then wake,\n"
+        "                       swipe up and type the pin (e.g. unlock iphone15 1111)\n"
+        "  fk <pan> <shoulder> <elbow> <wrist>   joint angles (deg) -> stylus tip (no arm needed)\n"
+        "  ik <x> <y> <z> <pitch>                stylus tip (mm, deg) -> joint angles\n"
         "\n"
         "registers are decimal or 0x hex. Useful ones:\n"
         "  40 torque enable (0/1)   55 EEPROM lock (0/1)   62 voltage (0.1V)\n"
@@ -70,6 +80,37 @@ void wait_for_enter(const std::string& prompt) {
     std::cout << prompt << std::flush;
     std::string ignored;
     std::getline(std::cin, ignored);
+}
+
+constexpr double kDegPerRad = 57.29577951308232;
+
+// `servo_tool fk` / `servo_tool ik`: try the kinematics from the command line. Pure math.
+int run_kinematics(const std::string& command, int argc, char** argv) {
+    if (argc != 4) {
+        std::cout << (command == "fk" ? "usage: servo_tool fk <pan> <shoulder> <elbow> <wrist>  (deg)\n"
+                                      : "usage: servo_tool ik <x> <y> <z> <pitch>  (mm, deg)\n");
+        return 1;
+    }
+    double v[4];
+    for (int i = 0; i < 4; ++i) v[i] = std::atof(argv[i]);
+
+    arm::Joints q;
+    if (command == "fk") {
+        q = {v[0] / kDegPerRad, v[1] / kDegPerRad, v[2] / kDegPerRad, v[3] / kDegPerRad};
+    } else {
+        std::string why;
+        if (!arm::inverse({v[0], v[1], v[2], v[3] / kDegPerRad}, &q, &why)) {
+            std::cout << "no solution: " << why << "\n";
+            return 1;
+        }
+    }
+    const arm::TipPose tip = arm::forward(q);
+    std::printf("joints (deg): pan %.2f  shoulder %.2f  elbow %.2f  wrist %.2f\n",
+                q.pan * kDegPerRad, q.shoulder * kDegPerRad, q.elbow * kDegPerRad,
+                q.wrist * kDegPerRad);
+    std::printf("tip (mm):     x %.1f  y %.1f  z %.1f  pitch %.1f deg\n", tip.x, tip.y, tip.z,
+                tip.pitch * kDegPerRad);
+    return 0;
 }
 
 // One servo at a time: new servos are all ID 1, so two on the bus would both answer.
@@ -142,11 +183,18 @@ int main(int argc, char** argv) {
     const std::string command = argv[arg++];
     const int remaining = argc - arg;
 
-    if (command == "record" || command == "replay") {
-        const std::vector<std::string> args(argv + arg, argv + argc);
-        return command == "record" ? arm::record_command(requested_port, args)
-                                   : arm::replay_command(requested_port, args);
+    if (command == "fk" || command == "ik") {
+        return run_kinematics(command, argc - arg, argv + arg);
     }
+    const std::vector<std::string> args(argv + arg, argv + argc);
+    if (command == "record") return arm::record_command(requested_port, args);
+    if (command == "replay") return arm::replay_command(requested_port, args);
+    if (command == "calibrate") return arm::calibrate_command(requested_port, args);
+    if (command == "where") return arm::where_command(requested_port, args);
+    if (command == "move-to") return arm::move_command(requested_port, args);
+    if (command == "tap") return arm::tap_command(requested_port, args);
+    if (command == "swipe") return arm::swipe_command(requested_port, args);
+    if (command == "unlock") return arm::unlock_command(requested_port, args);
 
     SerialPort port;
     if (!port.open(requested_port, baud_rate)) {

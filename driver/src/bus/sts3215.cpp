@@ -1,6 +1,6 @@
-#include "sts3215.h"
+#include "bus/sts3215.h"
 
-#include "transport.h"
+#include "bus/transport.h"
 
 #include <algorithm>
 #include <chrono>
