@@ -1,6 +1,5 @@
 #include "motion/arm.h"
 
-#include "bus/serial_port.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,13 +42,28 @@ int wrapped_delta(int a, int b) {
     return d > 2048 ? d - 4096 : d;
 }
 
-bool open_port(const std::string& name, SerialPort* port) {
-    if (port->open(name, sts3215::kDefaultBaudRate)) return true;
-    std::cout << port->last_error() << "\n";
+bool open_bus(const std::string& name, Connection* link) {
+    std::string error;
+    if (open_connection(name, sts3215::kDefaultBaudRate, link, &error)) return true;
+    std::cout << error << "\n";
     return false;
 }
 
+namespace {
+bool g_fixed_calibration = false;
+Calibration g_calibration;
+}
+
+void use_calibration(const Calibration& cal) {
+    g_calibration = cal;
+    g_fixed_calibration = true;
+}
+
 bool load_calibration(Calibration* cal) {
+    if (g_fixed_calibration) {
+        *cal = g_calibration;
+        return true;
+    }
     std::string error;
     if (Calibration::load(kCalibrationFile, cal, &error)) return true;
     std::cout << error << "\n";

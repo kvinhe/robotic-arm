@@ -1,7 +1,11 @@
 #include "commands/commands.h"
 #include "kinematics/kinematics.h"
+#include "bus/connection.h"
 #include "bus/serial_port.h"
 #include "bus/sts3215.h"
+#ifdef WITH_MUJOCO
+#include "sim/sim.h"
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -13,8 +17,9 @@ namespace {
 
 void print_usage() {
     std::cout <<
-        "usage: servo_tool [PORT] [--baud N] <command> [args]\n"
+        "usage: servo_tool [--sim | --sim-headless | PORT] [--baud N] <command> [args]\n"
         "  PORT is optional when exactly one USB serial adapter is plugged in\n"
+        "  --sim runs the command on a simulated arm and phone (MuJoCo) instead\n"
         "\n"
         "commands:\n"
         "  scan                 ping every ID from 0 to 253 and list the ones that answer\n"
@@ -159,7 +164,7 @@ int run_assign(sts3215::Bus& bus, int count) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+int run_tool(int argc, char** argv) {
     int arg = 1;
     std::string requested_port;
     if (arg < argc && looks_like_port(argv[arg])) {
@@ -196,14 +201,15 @@ int main(int argc, char** argv) {
     if (command == "swipe") return arm::swipe_command(requested_port, args);
     if (command == "unlock") return arm::unlock_command(requested_port, args);
 
-    SerialPort port;
-    if (!port.open(requested_port, baud_rate)) {
-        std::cout << port.last_error() << "\n";
+    Connection link;
+    std::string open_error;
+    if (!open_connection(requested_port, baud_rate, &link, &open_error)) {
+        std::cout << open_error << "\n";
         return 1;
     }
-    std::cout << "opened " << port.name() << " at " << baud_rate << " baud\n";
+    std::cout << "opened " << link.name << " at " << baud_rate << " baud\n";
 
-    sts3215::Bus bus(port);
+    sts3215::Bus bus(*link.port);
 
     if (command == "scan") {
         std::cout << "scanning IDs 0-253, this takes a few seconds...\n";
@@ -391,4 +397,15 @@ int main(int argc, char** argv) {
     std::cout << "unknown command: " << command << "\n\n";
     print_usage();
     return 1;
+}
+
+int main(int argc, char** argv) {
+#ifdef WITH_MUJOCO
+    const std::string first = argc > 1 ? argv[1] : "";
+    if (first == "--sim" || first == "--sim-headless") {
+        argv[1] = argv[0];   // drop the flag, so the command sees its usual arguments
+        return sim::run(SIM_SCENE, first == "--sim-headless", [&] { return run_tool(argc - 1, argv + 1); });
+    }
+#endif
+    return run_tool(argc, argv);
 }

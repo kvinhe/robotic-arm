@@ -26,9 +26,24 @@ add_executable(servo_tool
     src/motion/arm.cpp src/motion/paths.cpp
     src/commands/record_replay.cpp src/commands/calibrate.cpp src/commands/touch.cpp
     src/commands/unlock.cpp
-    src/bus/serial_port.cpp)
+    src/bus/serial_port.cpp src/bus/connection.cpp)
 # ...and link in the driver_core library (the protocol and recording code).
 target_link_libraries(servo_tool PRIVATE driver_core)
+
+# Optional MuJoCo simulation (`servo_tool --sim`), built when MuJoCo and GLFW are installed:
+# brew install --cask mujoco && brew install glfw
+set(MUJOCO_FRAMEWORKS /Applications/MuJoCo.app/Contents/Frameworks)
+file(GLOB MUJOCO ${MUJOCO_FRAMEWORKS}/mujoco.framework/Versions/A/libmujoco.*.dylib)
+find_package(glfw3 QUIET)
+if(MUJOCO AND glfw3_FOUND)
+    target_sources(servo_tool PRIVATE src/sim/sim.cpp)
+    target_compile_options(servo_tool PRIVATE -F${MUJOCO_FRAMEWORKS})
+    target_compile_definitions(servo_tool PRIVATE WITH_MUJOCO
+        SIM_SCENE="${CMAKE_CURRENT_SOURCE_DIR}/sim/scene.xml")
+    target_link_libraries(servo_tool PRIVATE ${MUJOCO} glfw)
+    set_target_properties(servo_tool PROPERTIES BUILD_RPATH ${MUJOCO_FRAMEWORKS})
+    message(STATUS "MuJoCo found: servo_tool --sim is available")
+endif()
 
 # Tests: a second program, built from the test files plus the same library.
 enable_testing()

@@ -3,6 +3,7 @@
 #include "kinematics/calibration.h"
 #include "kinematics/kinematics.h"
 #include "motion/recording.h"
+#include "bus/connection.h"
 #include "bus/sts3215.h"
 
 #include <array>
@@ -10,8 +11,6 @@
 #include <csignal>
 #include <string>
 #include <vector>
-
-class SerialPort;
 
 namespace arm {
 
@@ -33,8 +32,9 @@ void watch_ctrl_c();
 double seconds_since(Clock::time_point start);
 bool wait_for_enter(const std::string& prompt);   // false if Ctrl+C was pressed
 int wrapped_delta(int a, int b);   // shortest signed step between encoder counts
-bool open_port(const std::string& name, SerialPort* port);
+bool open_bus(const std::string& name, Connection* link);   // prints the error
 bool load_calibration(Calibration* cal);
+void use_calibration(const Calibration& cal);   // instead of calibration.txt (the simulator)
 void print_pose(const char* label, const Pose& actual, const Pose& goal);
 void print_tip(const char* label, const TipPose& p);
 

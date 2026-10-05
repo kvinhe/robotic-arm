@@ -1,6 +1,5 @@
 #include "motion/arm.h"
 #include "commands/commands.h"
-#include "bus/serial_port.h"
 
 #include <algorithm>
 #include <atomic>
@@ -21,10 +20,10 @@ int calibrate_command(const std::string& port_name, const std::vector<std::strin
         return 1;
     }
 
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
     if (!robot.torque(false)) {
         std::cout << "could not reach every joint: " << robot.error() << "\n";
         return 1;
@@ -180,10 +179,10 @@ int where_command(const std::string& port_name, const std::vector<std::string>& 
     }
     Calibration cal;
     if (!load_calibration(&cal)) return 1;
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
 
     Pose counts{};
     if (!robot.read(&counts)) {

@@ -1,6 +1,5 @@
 #include "motion/arm.h"
 #include "commands/commands.h"
-#include "bus/serial_port.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -60,10 +59,10 @@ int record_command(const std::string& port_name, const std::vector<std::string>&
         return 1;
     }
 
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
     if (!robot.torque(false)) {
         std::cout << "could not reach every joint: " << robot.error() << "\n";
         return 1;
@@ -71,7 +70,7 @@ int record_command(const std::string& port_name, const std::vector<std::string>&
 
     watch_ctrl_c();
     std::printf("Recording %.0f s on %s -- move the arm by hand now. Ctrl+C stops early.\n",
-                o.seconds, port.name().c_str());
+                o.seconds, link.name.c_str());
 
     std::vector<Sample> samples;
     const auto start = Clock::now();
@@ -145,10 +144,10 @@ int replay_command(const std::string& port_name, const std::vector<std::string>&
                 retrace ? " out and the same back" : "", 100.0 * peak / kSpeedCap);
     print_ranges(recording);
 
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
     watch_ctrl_c();
 
     Pose present{};

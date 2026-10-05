@@ -142,6 +142,32 @@ down -- and its model angles are computed from the geometry.
 reachable, above the table and inside the calibrated range, or nothing moves. It ends
 holding with torque on; add `--release` to let go.
 
+## Simulation (MuJoCo)
+
+```
+brew install --cask mujoco && brew install glfw       # once; CMake picks them up
+build/servo_tool --sim unlock iphone15 1111            # 3D window
+build/servo_tool --sim-headless unlock iphone15 1111   # no window, just the log
+```
+
+`--sim` runs any command against a simulated arm and phone instead of the USB bus. The
+simulated bus answers the same STS3215 packets as the real servos -- same code path, same
+safety checks -- with each servo's speed, acceleration and torque limits, gravity, and a
+spring-mounted stylus. The arm starts with the stylus resting on the middle of the phone
+screen, and every touch is logged in screen coordinates:
+
+```
+  [sim] touch 1: tap at 0.8 left, -0.0 up (0.35 s)
+  [sim] touch 2: drag from 0.2 left, -65.4 up to -0.4 left, 0.0 up (1.15 s)
+  [sim] touch 3: tap at 19.4 left, 18.3 up (0.37 s)
+```
+
+Everything is in `sim/scene.xml`: the arm, derived from TheRobotStudio's official SO-101
+model (`sim/meshes/LICENSE`, Apache-2.0) with the wrist roll servo and gripper replaced by
+this build's stylus wrist mount and a 12.5 mm pen on a spring, plus the table and phone.
+It cannot tell you whether a real touchscreen registers a
+tap -- only where and how the stylus touched it.
+
 ## How the protocol works
 
 Each message is a packet on the serial line:
@@ -190,6 +216,7 @@ marker and it stays green from then on.
 | | `serial_port.h` | Serial port interface, plus finding the adapter automatically |
 | | `serial_port.cpp` | Its implementation, on termios (macOS / Linux) |
 | | `sts3215.h/.cpp` | Builds and parses servo packets; ping, read, write, set ID |
+| | `connection.h/.cpp` | Opens the bus: the USB serial port, or the simulated one |
 | `kinematics/` | `joints.h` | The four joints and the `Pose` type (encoder counts) |
 | | `kinematics.h/.cpp` | Forward and closed-form inverse kinematics |
 | | `calibration.h/.cpp` | Joint angles <-> encoder counts, saved in `calibration.txt` |
@@ -202,6 +229,7 @@ marker and it stays green from then on.
 | | `touch.cpp` | `move-to`, `tap`, `swipe` |
 | | `unlock.cpp` | `unlock`: phone screen layout and the unlock sequence |
 | | `phone.h` | Phone models, orientation and keypad layout for `unlock` |
+| `sim/` | `sim.h/.cpp` | `--sim`: the MuJoCo world, simulated servos on a simulated bus, touch log, window |
 
 | Test file | What it checks |
 | --- | --- |

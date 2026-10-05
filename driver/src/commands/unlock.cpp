@@ -1,7 +1,6 @@
 #include "commands/commands.h"
 #include "motion/paths.h"
 #include "commands/phone.h"
-#include "bus/serial_port.h"
 
 #include <algorithm>
 #include <cctype>
@@ -86,10 +85,10 @@ int unlock_command(const std::string& port_name, const std::vector<std::string>&
 
     Calibration cal;
     if (!load_calibration(&cal)) return 1;
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
     watch_ctrl_c();
 
     // Where the phone is: the stylus tip, placed by hand on the middle of the screen.

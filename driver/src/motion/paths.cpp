@@ -1,6 +1,5 @@
 #include "motion/paths.h"
 
-#include "bus/serial_port.h"
 
 #include <algorithm>
 #include <cctype>
@@ -105,10 +104,10 @@ int run_path(const std::string& port_name, const std::vector<Waypoint>& waypoint
              bool yes, double approach_speed, int acceleration) {
     Calibration cal;
     if (!load_calibration(&cal)) return 1;
-    SerialPort port;
-    if (!open_port(port_name, &port)) return 1;
-    sts3215::Bus bus(port);
-    Arm robot(bus, port.name());
+    Connection link;
+    if (!open_bus(port_name, &link)) return 1;
+    sts3215::Bus bus(*link.port);
+    Arm robot(bus, link.name);
     watch_ctrl_c();
 
     Pose present{};
