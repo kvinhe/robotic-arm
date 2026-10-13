@@ -49,6 +49,58 @@ void print_ranges(const Recording& r) {
     }
 }
 
+std::vector<Sample> record_samples(Arm& robot, double seconds) {
+    std::vector<Sample> samples;
+    const auto start = Clock::now();
+    auto next = start;
+    while (!g_stop && seconds_since(start) < seconds) {
+        Sample sample{seconds_since(start), {}};
+        if (robot.read(&sample.pose)) samples.push_back(sample);
+        next += kRecordTick;
+        std::this_thread::sleep_until(next);
+    }
+    return samples;
+}
+
+bool save_recording(Recording recording, const Options& options) {
+    if (recording.samples().size() < 2) {
+        std::cout << "too few samples to save -- check the bus\n";
+        return false;
+    }
+
+    const double first_sample_time = recording.samples().front().t;
+    std::vector<Sample> samples = recording.samples();
+    for (Sample& sample : samples) sample.t -= first_sample_time;
+    recording = Recording(std::move(samples));
+
+    std::string error;
+    if (!recording.save(options.file, &error)) {
+        std::cout << error << "\n";
+        return false;
+    }
+
+    const size_t sample_count = recording.samples().size();
+    std::printf("Saved %zu samples over %.1f s (%.0f Hz) to %s\n", sample_count,
+                recording.duration(), (sample_count - 1) / recording.duration(),
+                options.file.c_str());
+    print_ranges(recording);
+    if (max_abs_difference(recording.first(), recording.last()) > kStartTolerance) {
+        std::cout << "Note: it ends away from where it started, so replay will retrace it back.\n";
+    }
+    return true;
+}
+
+bool speed_is_safe(const Recording& plan) {
+    const double peak = plan.peak_speed();
+    const double allowed = kSpeedCap * kSpeedHeadroom;
+    if (peak <= allowed) return true;
+
+    std::printf("Too fast: a joint would need %.0f counts/s, over the %.0f allowed.\n"
+                "Use --seconds %.1f or more.\n",
+                peak, allowed, plan.duration() * peak / allowed + 0.05);
+    return false;
+}
+
 }  // namespace
 
 int record_command(const std::string& port_name, const std::vector<std::string>& args) {
@@ -72,37 +124,7 @@ int record_command(const std::string& port_name, const std::vector<std::string>&
     std::printf("Recording %.0f s on %s -- move the arm by hand now. Ctrl+C stops early.\n",
                 o.seconds, link.name.c_str());
 
-    std::vector<Sample> samples;
-    const auto start = Clock::now();
-    auto next = start;
-    while (!g_stop && seconds_since(start) < o.seconds) {
-        Sample s{seconds_since(start), {}};
-        if (robot.read(&s.pose)) samples.push_back(s);   // a bad read drops one sample
-        next += kRecordTick;
-        std::this_thread::sleep_until(next);
-    }
-
-    if (samples.size() < 2) {
-        std::cout << "too few samples to save -- check the bus\n";
-        return 1;
-    }
-    const double t0 = samples.front().t;
-    for (Sample& s : samples) s.t -= t0;
-    const Recording recording(std::move(samples));
-
-    std::string error;
-    if (!recording.save(o.file, &error)) {
-        std::cout << error << "\n";
-        return 1;
-    }
-    const size_t n = recording.samples().size();
-    std::printf("Saved %zu samples over %.1f s (%.0f Hz) to %s\n", n, recording.duration(),
-                (n - 1) / recording.duration(), o.file.c_str());
-    print_ranges(recording);
-    if (max_abs_difference(recording.first(), recording.last()) > kStartTolerance) {
-        std::cout << "Note: it ends away from where it started, so replay will retrace it back.\n";
-    }
-    return 0;
+    return save_recording(Recording(record_samples(robot, o.seconds)), o) ? 0 : 1;
 }
 
 int replay_command(const std::string& port_name, const std::vector<std::string>& args) {
@@ -123,21 +145,14 @@ int replay_command(const std::string& port_name, const std::vector<std::string>&
 
     Recording plan = o.reverse ? recording.reversed() : recording;
     if (o.seconds > 0.0) plan = plan.scaled_to(o.seconds);
-    const double motion_seconds = plan.duration();
-
     // Always finish at rest: a recording that ends elsewhere is retraced back.
     const bool retrace =
         !o.reverse && max_abs_difference(plan.first(), plan.last()) > kStartTolerance;
     if (retrace) plan = plan.retraced();
 
+    const double motion_seconds = plan.duration();
     const double peak = plan.peak_speed();
-    const double allowed = kSpeedCap * kSpeedHeadroom;
-    if (peak > allowed) {
-        std::printf("Too fast: a joint would need %.0f counts/s, over the %.0f allowed.\n"
-                    "Use --seconds %.1f or more.\n",
-                    peak, allowed, motion_seconds * peak / allowed + 0.05);
-        return 1;
-    }
+    if (!speed_is_safe(plan)) return 1;
 
     std::printf("\nreplay %s%s: %.1f s%s, peak speed %.0f%% of the cap\n", o.file.c_str(),
                 o.reverse ? " reversed" : "", motion_seconds,
